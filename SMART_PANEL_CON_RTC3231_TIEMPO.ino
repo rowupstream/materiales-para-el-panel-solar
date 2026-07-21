@@ -1,6 +1,7 @@
-#include <Wire.h>  // must be included here so that Arduino library object file references work
-#include <RtcDS1307.h>
-RtcDS1307<TwoWire> Rtc(Wire);
+//Basado en https://github.com/Makuna/Rtc/blob/master/examples/DS1302_Simple/DS1302_Simple.ino
+#include <RtcDS1302.h>
+ThreeWire myWire(4, 5, 2);  // IO, SCLK, CE
+RtcDS1302<ThreeWire> Rtc(myWire);
 #include <Servo.h>
 Servo panel;
 
@@ -17,43 +18,6 @@ char DiaSemana[][4] = { "Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab" };
 // Ejemplo 2017 diciembre 09, 08:00:00  dia 1-Lunes (0=Dom, 1=Lun, 2=Mar, 3=Mie, 4=Jue, 5=Vie, 6=Sab)
 // DateTime dt(2017, 12, 09, 08, 00, 0, 6);
 
-bool wasError(const char* errorTopic = "") {
-  uint8_t error = Rtc.LastError();
-  if (error != 0) {
-    // we have a communications error
-    // see https://www.arduino.cc/reference/en/language/functions/communication/wire/endtransmission/
-    // for what the number means
-    Serial.print("[");
-    Serial.print(errorTopic);
-    Serial.print("] WIRE communications error (");
-    Serial.print(error);
-    Serial.print(") : ");
-
-    switch (error) {
-      case Rtc_Wire_Error_None:
-        Serial.println("(none?!)");
-        break;
-      case Rtc_Wire_Error_TxBufferOverflow:
-        Serial.println("transmit buffer overflow");
-        break;
-      case Rtc_Wire_Error_NoAddressableDevice:
-        Serial.println("no device responded");
-        break;
-      case Rtc_Wire_Error_UnsupportedRequest:
-        Serial.println("device doesn't support request");
-        break;
-      case Rtc_Wire_Error_Unspecific:
-        Serial.println("unspecified error");
-        break;
-      case Rtc_Wire_Error_CommunicationTimeout:
-        Serial.println("communications timed out");
-        break;
-    }
-    return true;
-  }
-  return false;
-}
-
 void setup() {
   Serial.begin(9600);
 
@@ -61,48 +25,32 @@ void setup() {
   Serial.print(__DATE__);
   Serial.println(__TIME__);
   Rtc.Begin();
-#if defined(WIRE_HAS_TIMEOUT)
-  Wire.setWireTimeout(3000 /* us */, true /* reset_on_timeout */);
-#endif
   // La linea fija la fecha, hora y dia de la semana, se debe suprimir la linea en la segunda carga
   //rtc.setDateTime(dt);
-  RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__);
-  printDateTime(compiled);
+  RtcDateTime fechaCompilado = RtcDateTime(__DATE__, __TIME__);
+  imprimirFecha(fechaCompilado);
   Serial.println();
 
   if (!Rtc.IsDateTimeValid()) {
-    if (!wasError("setup IsDateTimeValid")) {
-      // Common Causes:
-      //    1) first time you ran and the device wasn't running yet
-      //    2) the battery on the device is low or even missing
+    Serial.println("Fecha invalida RTC");
+    Rtc.SetDateTime(fechaCompilado);
+  }
 
-      Serial.println("RTC lost confidence in the DateTime!");
-
-      // following line sets the RTC to the date & time this sketch was compiled
-      // it will also reset the valid flag internally unless the Rtc device is
-      // having an issue
-
-      Rtc.SetDateTime(compiled);
-    }
+  if (Rtc.GetIsWriteProtected()) {
+    Serial.println("RTC protegido contra escritura, habilitando...");
+    Rtc.SetIsWriteProtected(false);
   }
 
   if (!Rtc.GetIsRunning()) {
-    if (!wasError("setup GetIsRunning")) {
-      Serial.println("RTC was not actively running, starting now");
-      Rtc.SetIsRunning(true);
-    }
+    Serial.println("RTC no esta corriendo, iniciando ahora");
+    Rtc.SetIsRunning(true);
   }
 
-  RtcDateTime now = Rtc.GetDateTime();
-  if (!wasError("setup GetDateTime")) {
-    if (now < compiled) {
-      Serial.println("RTC is older than compile time, updating DateTime");
-      Rtc.SetDateTime(compiled);
-    } else if (now > compiled) {
-      Serial.println("RTC is newer than compile time, this is expected");
-    } else if (now == compiled) {
-      Serial.println("RTC is the same as compile time, while not expected all is still fine");
-    }
+  RtcDateTime fechaActual = Rtc.GetDateTime();
+
+  if (fechaActual < fechaCompilado) {
+    Serial.println("Fecha RTC es menor que fecha de compilado!  (Actualizando Fecha)");
+    Rtc.SetDateTime(fechaCompilado);
   }
 
   panel.attach(2);
@@ -167,11 +115,11 @@ void loop() {
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
-void printDateTime(const RtcDateTime& dt) {
-  char datestring[26];
+void imprimirFecha(const RtcDateTime& dt) {
+  char cadenaFecha[26];
 
-  snprintf_P(datestring,
-             countof(datestring),
+  snprintf_P(cadenaFecha,
+             countof(cadenaFecha),
              PSTR("%02u/%02u/%04u %02u:%02u:%02u"),
              dt.Month(),
              dt.Day(),
@@ -179,5 +127,5 @@ void printDateTime(const RtcDateTime& dt) {
              dt.Hour(),
              dt.Minute(),
              dt.Second());
-  Serial.print(datestring);
+  Serial.print(cadenaFecha);
 }
