@@ -53,7 +53,7 @@ void setup() {
     Rtc.SetDateTime(fechaCompilado);
   }
 
-  panel.attach(2);
+  panel.attach(9);
   panel.write(35);
 }
 
